@@ -1,51 +1,58 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:ui';
 import '../providers/habit_provider.dart';
 import '../widgets/habit_card.dart';
-import '../models/habit.dart';
+import 'dart:ui';
 
 class ListViewScreen extends ConsumerStatefulWidget {
-  const ListViewScreen({super.key});
+  final void Function(dynamic habit)? onHabitTap;
+  const ListViewScreen({super.key, this.onHabitTap});
 
   @override
   ConsumerState<ListViewScreen> createState() => _ListViewScreenState();
 }
 
 class _ListViewScreenState extends ConsumerState<ListViewScreen> {
+  int _selectedFilter = 0;
   String _searchQuery = '';
-  String _selectedFilter = 'All';
-  String _sortBy = 'Name';
-  final TextEditingController _searchController = TextEditingController();
-
+  String _sortBy = 'name';
   final List<String> _filters = ['All', 'Completed Today', 'Missed', 'Active', 'Favorites'];
-  final List<String> _sortOptions = ['Name', 'Date Created', 'Last Completed', 'Streak', 'Type'];
+  final List<String> _sortOptions = ['Name', 'Date Created', 'Last Completed', 'Streak'];
 
-  List<Habit> _filterAndSortHabits(List<Habit> habits) {
-    List<Habit> filtered = habits.where((habit) {
+  List _filterHabits(List habits) {
+    List filtered = habits.where((habit) {
       // Search filter
       if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        if (!habit.name.toLowerCase().contains(query) &&
-            !(habit.description?.toLowerCase().contains(query) ?? false)) {
+        final query = _searchQuery.toLowerCase().trim();
+        final nameMatch = habit.name.toLowerCase().contains(query);
+        final descriptionMatch = (habit.description?.toLowerCase().contains(query) ?? false);
+        final typeMatch = habit.type.toLowerCase().contains(query);
+        
+        if (!nameMatch && !descriptionMatch && !typeMatch) {
           return false;
         }
       }
 
       // Category filter
       switch (_selectedFilter) {
-        case 'All':
+        case 0: // All
           return true;
-        case 'Completed Today':
-          return habit.isCompletedToday;
-        case 'Missed':
+        case 1: // Completed Today
           final today = DateTime.now();
-          final lastCompleted = habit.history.isNotEmpty ? habit.history.last : null;
+          return habit.history.any((date) =>
+              date.year == today.year &&
+              date.month == today.month &&
+              date.day == today.day);
+        case 2: // Missed
+          final today = DateTime.now();
+          final lastCompleted = habit.history.isNotEmpty
+              ? habit.history.last
+              : null;
           return lastCompleted == null ||
               (today.difference(lastCompleted).inDays > 1);
-        case 'Active':
-          return habit.isActive;
-        case 'Favorites':
+        case 3: // Active
+          return habit.isActive && habit.history.isNotEmpty;
+        case 4: // Favorites
           return habit.isFavorite;
         default:
           return true;
@@ -54,24 +61,21 @@ class _ListViewScreenState extends ConsumerState<ListViewScreen> {
 
     // Sort
     switch (_sortBy) {
-      case 'Name':
+      case 'name':
         filtered.sort((a, b) => a.name.compareTo(b.name));
         break;
-      case 'Date Created':
+      case 'dateCreated':
         filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         break;
-      case 'Last Completed':
+      case 'lastCompleted':
         filtered.sort((a, b) {
           final aLast = a.history.isNotEmpty ? a.history.last : DateTime(1900);
           final bLast = b.history.isNotEmpty ? b.history.last : DateTime(1900);
           return bLast.compareTo(aLast);
         });
         break;
-      case 'Streak':
+      case 'streak':
         filtered.sort((a, b) => b.currentStreak.compareTo(a.currentStreak));
-        break;
-      case 'Type':
-        filtered.sort((a, b) => a.type.compareTo(b.type));
         break;
     }
 
@@ -79,18 +83,11 @@ class _ListViewScreenState extends ConsumerState<ListViewScreen> {
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final habits = ref.watch(habitProvider);
-    final filteredHabits = _filterAndSortHabits(habits);
+    final filteredHabits = _filterHabits(habits);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorScheme = Theme.of(context).colorScheme;
-
+    
     return Stack(
       children: [
         // Custom animated glass background
@@ -101,14 +98,14 @@ class _ListViewScreenState extends ConsumerState<ListViewScreen> {
             gradient: LinearGradient(
               colors: isDark
                   ? [
-                      colorScheme.surface.withValues(alpha: 0.4),
-                      colorScheme.surface.withValues(alpha: 0.4),
-                      colorScheme.primary.withValues(alpha: 0.1),
+                      const Color(0x66121212),
+                      const Color(0x661E1E1E),
+                      const Color(0x66242424),
                     ]
-                  : [
-                      colorScheme.primary.withValues(alpha: 0.1),
-                      colorScheme.secondary.withValues(alpha: 0.1),
-                      colorScheme.surface.withValues(alpha: 0.8),
+                  : const [
+                      Color(0x66A1C4FD),
+                      Color(0x66FBC2EB),
+                      Color(0x66FDC2FB),
                     ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -118,242 +115,225 @@ class _ListViewScreenState extends ConsumerState<ListViewScreen> {
             filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
               color: isDark 
-                  ? colorScheme.surface.withValues(alpha: 0.3)
-                  : colorScheme.surface.withValues(alpha: 0.08),
+                  ? Colors.black.withOpacity(0.3)
+                  : Colors.white.withOpacity(0.08),
             ),
           ),
         ),
-        Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: Text(
-              'All Habits',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            toolbarHeight: 80,
-            titleSpacing: 16,
-            automaticallyImplyLeading: false,
-          ),
-          body: Column(
-            children: [
-              // Search and Filter Section
-              Padding(
-                padding: const EdgeInsets.all(16.0),
+        Padding(
+      padding: const EdgeInsets.fromLTRB(16.0, 45.0, 16.0, 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+              // Header with search
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  color: isDark 
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.white.withOpacity(0.35),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueAccent.withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Column(
                   children: [
-                    // Search Bar
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        color: colorScheme.surface.withValues(alpha: 0.15),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _searchQuery = value),
-                        decoration: InputDecoration(
-                          hintText: 'Search habits...',
-                          prefixIcon: Icon(
-                            Icons.search,
-                            color: colorScheme.onSurface.withValues(alpha: 0.6),
-                          ),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(
-                                    Icons.clear,
-                                    color: colorScheme.onSurface.withValues(alpha: 0.6),
-                                  ),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _searchQuery = '');
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                        style: TextStyle(
-                          color: colorScheme.onSurface,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    // Filter and Sort Row
                     Row(
                       children: [
-                        // Filter Dropdown
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: colorScheme.surface.withValues(alpha: 0.15),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _selectedFilter,
-                                isExpanded: true,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                items: _filters.map((filter) {
-                                  return DropdownMenuItem(
-                                    value: filter,
-                                    child: Text(
-                                      filter,
-                                      style: TextStyle(
-                                        color: colorScheme.onSurface,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() => _selectedFilter = value);
-                                  }
-                                },
-                                dropdownColor: colorScheme.surface.withValues(alpha: 0.95),
-                                icon: Icon(
-                                  Icons.filter_list,
-                                  color: colorScheme.onSurface.withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                        Icon(Icons.search, color: isDark ? Colors.white70 : Colors.black54),
                         const SizedBox(width: 12),
-                        
-                        // Sort Dropdown
                         Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: colorScheme.surface.withValues(alpha: 0.15),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _sortBy,
-                                isExpanded: true,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                items: _sortOptions.map((option) {
-                                  return DropdownMenuItem(
-                                    value: option,
-                                    child: Text(
-                                      option,
-                                      style: TextStyle(
-                                        color: colorScheme.onSurface,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() => _sortBy = value);
-                                  }
-                                },
-                                dropdownColor: colorScheme.surface.withValues(alpha: 0.95),
-                                icon: Icon(
-                                  Icons.sort,
-                                  color: colorScheme.onSurface.withValues(alpha: 0.6),
-                                ),
+                          child: TextField(
+                            onChanged: (value) => setState(() => _searchQuery = value),
+                            decoration: InputDecoration(
+                              hintText: 'Search habits...',
+                              border: InputBorder.none,
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white54 : Colors.black54,
                               ),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: Icon(
+                                        Icons.clear,
+                                        color: isDark ? Colors.white70 : Colors.black54,
+                                      ),
+                                      onPressed: () => setState(() => _searchQuery = ''),
+                                    )
+                                  : null,
                             ),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 16,
+                            ),
+                            textInputAction: TextInputAction.search,
                           ),
                         ),
                       ],
                     ),
-                    
-                    // Results Count
-                    if (filteredHabits.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '${filteredHabits.length} habit${filteredHabits.length == 1 ? '' : 's'} found',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurface.withValues(alpha: 0.7),
+          const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButton<String>(
+                            value: _sortBy,
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            items: _sortOptions.asMap().entries.map((entry) {
+                              final options = ['name', 'dateCreated', 'lastCompleted', 'streak'];
+                              return DropdownMenuItem(
+                                value: options[entry.key],
+                                child: Text(entry.value),
+                              );
+                            }).toList(),
+                            onChanged: (value) => setState(() => _sortBy = value!),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 14,
                             ),
+                            dropdownColor: isDark 
+                                ? Colors.grey[900]!.withOpacity(0.95)
+                                : Colors.white.withOpacity(0.95),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          icon: Icon(
+                            Icons.sort,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                          onPressed: () => _showSortDialog(context),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
               
-              // Habits List
-              Expanded(
-                child: filteredHabits.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
+              // Filter chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(_filters.length, (i) {
+                final selected = _selectedFilter == i;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                          color: selected 
+                              ? Colors.blueAccent.withOpacity(0.7) 
+                              : (isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.15)),
+                      borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            if (selected)
+                              BoxShadow(
+                                color: Colors.blueAccent.withOpacity(0.18),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                          ],
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => setState(() => _selectedFilter = i),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(
+                          _filters[i],
+                          style: TextStyle(
+                                color: selected 
+                                    ? Colors.white 
+                                    : (isDark ? Colors.white70 : Colors.black87),
+                            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 16),
+              
+              // Results count
+              if (filteredHabits.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 5,left: 12),
+                  child: Text(
+                    '${filteredHabits.length} habit${filteredHabits.length == 1 ? '' : 's'} found',
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              
+          filteredHabits.isEmpty
+              ? Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                             Icon(
-                              _searchQuery.isNotEmpty ? Icons.search_off : Icons.list_alt,
-                              size: 80,
-                              color: colorScheme.primary.withValues(alpha: 0.3),
+                              Icons.search_off, 
+                              size: 80, 
+                              color: Colors.blueAccent.withOpacity(0.3)
                             ),
-                            const SizedBox(height: 16),
+                        const SizedBox(height: 16),
                             Text(
                               _searchQuery.isNotEmpty 
                                   ? 'No habits match your search'
-                                  : habits.isEmpty 
-                                      ? 'No habits yet!'
-                                      : 'No habits match the filter',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: colorScheme.onSurface,
+                                  : 'No habits found!',
+                              style: TextStyle(
+                                color: isDark ? Colors.white70 : Colors.black54,
+                                fontSize: 16,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _searchQuery.isNotEmpty 
-                                  ? 'Try adjusting your search terms'
-                                  : habits.isEmpty
-                                      ? 'Create your first habit to get started'
-                                      : 'Try changing your filter or search',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurface.withValues(alpha: 0.7),
+                            if (_searchQuery.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Try adjusting your search or filters',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white54 : Colors.black45,
+                                  fontSize: 14,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                      ],
+                    ),
+                  ),
+                )
+              : Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 0),
+                    itemCount: filteredHabits.length,
+                    //separatorBuilder: (_, __) => const SizedBox(height: 16),
+                    itemBuilder: (context, i) => HabitCard(
+                      habit: filteredHabits[i],
+                          onTap: () => Navigator.pushNamed(
+                            context, 
+                            '/habit-details',
+                            arguments: filteredHabits[i],
+                          ),
+                          onComplete: () async {
+                            await ref.read(habitProvider.notifier).markCompleted(
+                              filteredHabits[i].id, 
+                              DateTime.now(),
+                            );
+                          },
+                          onDelete: () => _showDeleteDialog(context, ref, filteredHabits[i]),
                         ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: filteredHabits.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
-                        itemBuilder: (context, index) {
-                          final habit = filteredHabits[index];
-                          return HabitCard(
-                            habit: habit,
-                            onTap: () => Navigator.pushNamed(
-                              context,
-                              '/habit-details',
-                              arguments: habit,
-                            ),
-                            onComplete: () async {
-                              await ref.read(habitProvider.notifier).markCompleted(
-                                habit.id,
-                                DateTime.now(),
-                              );
-                            },
-                            onDelete: () => _showDeleteDialog(context, ref, habit),
-                          );
-                        },
                       ),
-              ),
+                    ),
+                    SizedBox(height: MediaQuery.of(context).padding.bottom + 70),
             ],
           ),
         ),
@@ -361,39 +341,56 @@ class _ListViewScreenState extends ConsumerState<ListViewScreen> {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, Habit habit) {
-    final colorScheme = Theme.of(context).colorScheme;
-    
+  void _showSortDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: colorScheme.surface,
-        title: Text(
-          'Delete Habit',
-          style: TextStyle(color: colorScheme.onSurface),
+        backgroundColor: Colors.white.withOpacity(0.95),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Sort Habits'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _sortOptions.asMap().entries.map((entry) {
+            final options = ['name', 'dateCreated', 'lastCompleted', 'streak'];
+            final isSelected = _sortBy == options[entry.key];
+            return ListTile(
+              leading: Icon(
+                isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                color: isSelected ? Colors.blueAccent : null,
+              ),
+              title: Text(entry.value),
+              onTap: () {
+                setState(() => _sortBy = options[entry.key]);
+                Navigator.pop(context);
+              },
+            );
+          }).toList(),
         ),
-        content: Text(
-          'Are you sure you want to delete "${habit.name}"?',
-          style: TextStyle(color: colorScheme.onSurface),
-        ),
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context, WidgetRef ref, dynamic habit) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white.withOpacity(0.95),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Habit'),
+        content: Text('Are you sure you want to delete "${habit.name}"? This action cannot be undone.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: colorScheme.primary),
-            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () async {
-              await ref.read(habitProvider.notifier).deleteHabit(habit.id);
-              if (context.mounted) Navigator.of(context).pop();
+            onPressed: () {
+              ref.read(habitProvider.notifier).deleteHabit(habit.id);
+              Navigator.pop(context);
             },
-            child: Text(
-              'Delete',
-              style: TextStyle(color: colorScheme.error),
-            ),
-          ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+                ),
         ],
       ),
     );

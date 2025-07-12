@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
@@ -12,8 +13,11 @@ import 'screens/add_edit_habit_screen.dart';
 import 'screens/habit_details_screen.dart';
 import 'services/notification_service.dart';
 import 'providers/settings_provider.dart';
+import 'providers/habit_provider.dart';
 import 'widgets/liquid_glass_bottom_nav.dart';
 import 'models/habit.dart';
+import 'dart:async';
+import 'screens/splash_screen.dart';
 
 class App extends ConsumerStatefulWidget {
   const App({super.key});
@@ -43,7 +47,7 @@ class _AppState extends ConsumerState<App> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => Dialog(
-            backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.18),
+            backgroundColor: Colors.white.withValues(alpha: 0.18),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -52,46 +56,31 @@ class _AppState extends ConsumerState<App> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.notifications_active, 
-                      size: 48, 
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+                    const Icon(Icons.notifications_active, size: 48, color: Colors.blueAccent),
                     const SizedBox(height: 16),
-                    Text(
+                    const Text(
                       'Enable Notifications',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
-                    Text(
+                    const Text(
                       'To get habit reminders and stay on track, please allow notifications.',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                      ),
+                      style: TextStyle(fontSize: 16),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                        backgroundColor: Colors.blueAccent.withValues(alpha: 0.85),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 32),
                         elevation: 8,
                       ),
                       onPressed: () async {
                         await NotificationService.requestNotificationPermission();
-                        if (mounted) Navigator.of(ctx).pop();
+                        if (mounted && ctx.mounted) Navigator.of(ctx).pop();
                       },
-                      child: Text(
-                        'Allow Notifications', 
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onPrimary, 
-                          fontWeight: FontWeight.bold
-                        ),
-                      ),
+                      child: const Text('Allow Notifications', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -106,46 +95,33 @@ class _AppState extends ConsumerState<App> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       themeMode: settings.themeMode,
       theme: FlexThemeData.light(
         scheme: FlexScheme.mandyRed,
         fontFamily: GoogleFonts.poppins().fontFamily,
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFFE91E63),
-          secondary: Color(0xFF9C27B0),
-          surface: Color(0xFFFFFFFF),
-          onPrimary: Color(0xFFFFFFFF),
-          onSecondary: Color(0xFFFFFFFF),
-          onSurface: Color(0xFF1A1A1A),
-        ),
-        textTheme: GoogleFonts.poppinsTextTheme(ThemeData.light().textTheme),
-        useMaterial3: true,
       ),
-      darkTheme: FlexThemeData.dark(
-        scheme: FlexScheme.mandyRed,
-        fontFamily: GoogleFonts.poppins().fontFamily,
+      darkTheme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        cardColor: const Color(0xFF1E1E1E),
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFE91E63),
-          secondary: Color(0xFF9C27B0),
           surface: Color(0xFF1E1E1E),
-          onPrimary: Color(0xFFFFFFFF),
-          onSecondary: Color(0xFFFFFFFF),
-          onSurface: Color(0xFFFFFFFF),
+          primary: Color(0xFFBB86FC),
+          secondary: Color(0xFF03DAC6),
         ),
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
-        useMaterial3: true,
       ),
+      initialRoute: '/',
       routes: {
+        '/': (context) => const SplashScreen(),
+        '/main': (context) => const MainContent(),
         '/add-habit': (context) => const AddEditHabitScreen(),
         '/habit-details': (context) {
           final habit = ModalRoute.of(context)!.settings.arguments as Habit;
           return HabitDetailsScreen(habit: habit);
         },
       },
-      home: const MainContent(),
     );
   }
 }
@@ -158,7 +134,13 @@ class MainContent extends ConsumerStatefulWidget {
 }
 
 class _MainContentState extends ConsumerState<MainContent> {
+   late PageController _pageController;
+   //late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
   int _selectedIndex = 0;
+  
+  Timer? _missedHabitTimer;
   final List<Widget> _screens = const [
     DashboardScreen(),
     ListViewScreen(),
@@ -172,17 +154,68 @@ class _MainContentState extends ConsumerState<MainContent> {
     BottomNavItem(icon: Icons.settings, title: 'Settings'),
   ];
 
-  void _onItemTapped(int index) {
+  @override
+  void initState() {
+    super.initState();
+    _startMissedHabitTimer();
+    _pageController = PageController(initialPage: _selectedIndex);
+    //  _animationController = AnimationController(
+    //   duration: const Duration(milliseconds: 300),
+    //   vsync: this,
+    // );
+    // _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    //   CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    // );
+    // _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _missedHabitTimer?.cancel();
+    _pageController.dispose();
+    //_animationController.dispose();
+    super.dispose();
+  }
+
+  void _startMissedHabitTimer() {
+    // Check for missed habits every 5 minutes
+    _missedHabitTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      if (mounted) {
+        ref.read(habitProvider.notifier).checkMissedHabits();
+      }
+    });
+  }
+  void _onPageChanged(int index) {
+    if (_selectedIndex != index) {
     setState(() {
       _selectedIndex = index;
     });
+    HapticFeedback.selectionClick();
+    }
+  }
+
+   void _onItemTapped(int index) {
+    if (_selectedIndex != index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    HapticFeedback.lightImpact();
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+     _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorScheme = Theme.of(context).colorScheme;
-    
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -190,33 +223,48 @@ class _MainContentState extends ConsumerState<MainContent> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  colorScheme.surface.withValues(alpha: 0.4),
-                  colorScheme.surface.withValues(alpha: 0.4),
-                  colorScheme.primary.withValues(alpha: 0.1),
+                  const Color(0x66121212),
+                  const Color(0x661E1E1E),
+                  const Color(0x66242424),
                 ]
-              : [
-                  colorScheme.primary.withValues(alpha: 0.1),
-                  colorScheme.secondary.withValues(alpha: 0.1),
-                  colorScheme.surface.withValues(alpha: 0.8),
+              : const [
+                  Color(0x66A1C4FD),
+                  Color(0x66FBC2EB),
+                  Color(0x66FDC2FB),
                 ],
         ),
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 100), // Add padding for navigation bar
-            child: _screens[_selectedIndex],
-          ),
-        ),
-        bottomNavigationBar: LiquidGlassBottomNav(
+        body:Stack(
+          children: [
+            PageView(
+              scrollDirection: Axis.vertical,
+              children: _screens,
+              controller: _pageController,
+              onPageChanged: _onPageChanged,
+              physics: BouncingScrollPhysics(),
+            ),
+            Positioned(
+              bottom: 8,
+              left: 8,
+              right: 8,
+              height: 120,
+              child: LiquidGlassBottomNav(
           currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
+          onTap: (index) => _onItemTapped(index),
           items: _navItems,
         ),
+            ),
+          
+            //position for floating action button
+            
+          ],
+        ),
+        
         floatingActionButton: _selectedIndex == 0
             ? FloatingActionButton(
+
                 onPressed: () {
                   Navigator.pushNamed(context, '/add-habit');
                 },
@@ -228,32 +276,32 @@ class _MainContentState extends ConsumerState<MainContent> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        colorScheme.primary.withValues(alpha: 0.8),
-                        colorScheme.secondary.withValues(alpha: 0.6),
+                        Colors.blueAccent.withValues(alpha: 0.8),
+                        Colors.purpleAccent.withValues(alpha: 0.6),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: colorScheme.onPrimary.withValues(alpha: 0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: colorScheme.primary.withValues(alpha: 0.3),
+                        color: Colors.blueAccent.withValues(alpha: 0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 8),
                       ),
                     ],
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.add,
-                    color: colorScheme.onPrimary,
+                    color: Colors.white,
                     size: 28,
                   ),
                 ),
               )
             : null,
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        floatingActionButtonLocation:FloatingActionButtonLocation.endTop
       ),
     );
   }

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'dart:ui';
 import '../models/habit.dart';
 import '../providers/habit_provider.dart';
+import '../services/notification_service.dart';
 
 class HabitDetailsScreen extends ConsumerStatefulWidget {
   final Habit habit;
-  
   const HabitDetailsScreen({super.key, required this.habit});
 
   @override
@@ -17,7 +18,8 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
   bool _isEditing = false;
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
-  String _selectedFrequency = 'daily';
+  String _selectedType = '';
+  String _selectedFrequency = '';
   String? _selectedReminderTime;
   bool _isReminderOn = false;
   int _targetDays = 30;
@@ -25,8 +27,13 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeFields();
+  }
+
+  void _initializeFields() {
     _nameController.text = widget.habit.name;
     _descriptionController.text = widget.habit.description ?? '';
+    _selectedType = widget.habit.type;
     _selectedFrequency = widget.habit.frequency;
     _selectedReminderTime = widget.habit.reminderTime;
     _isReminderOn = widget.habit.isReminderOn;
@@ -41,12 +48,16 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
   }
 
   void _toggleCompletion() async {
-    final habit = ref.read(habitProvider).firstWhere((h) => h.id == widget.habit.id);
-    if (habit.isCompletedToday) {
-      await ref.read(habitProvider.notifier).markUncompleted(habit.id, DateTime.now());
+    if (widget.habit.isCompletedToday) {
+      await ref.read(habitProvider.notifier).markUncompleted(widget.habit.id, DateTime.now());
     } else {
-      await ref.read(habitProvider.notifier).markCompleted(habit.id, DateTime.now());
+      await ref.read(habitProvider.notifier).markCompleted(widget.habit.id, DateTime.now());
+      await NotificationService.showCompletionNotification(widget.habit);
     }
+  }
+
+  void _toggleActive() async {
+    await ref.read(habitProvider.notifier).toggleHabitActive(widget.habit.id);
   }
 
   void _deleteHabit() async {
@@ -84,7 +95,7 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
       frequency: _selectedFrequency,
       reminderTime: _selectedReminderTime,
       isReminderOn: _isReminderOn,
-      type: widget.habit.type,
+      type: _selectedType,
       createdAt: widget.habit.createdAt,
       history: widget.habit.history,
       description: _descriptionController.text,
@@ -102,7 +113,6 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
   Widget build(BuildContext context) {
     final habit = ref.watch(habitProvider).firstWhere((h) => h.id == widget.habit.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Stack(
       children: [
@@ -114,14 +124,14 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
             gradient: LinearGradient(
               colors: isDark
                   ? [
-                      colorScheme.surface.withValues(alpha: 0.4),
-                      colorScheme.surface.withValues(alpha: 0.4),
-                      colorScheme.primary.withValues(alpha: 0.1),
+                      const Color(0x66121212),
+                      const Color(0x661E1E1E),
+                      const Color(0x66242424),
                     ]
-                  : [
-                      colorScheme.primary.withValues(alpha: 0.1),
-                      colorScheme.secondary.withValues(alpha: 0.1),
-                      colorScheme.surface.withValues(alpha: 0.8),
+                  : const [
+                      Color(0x66A1C4FD),
+                      Color(0x66FBC2EB),
+                      Color(0x66FDC2FB),
                     ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -131,8 +141,8 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
             filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Container(
               color: isDark 
-                  ? colorScheme.surface.withValues(alpha: 0.3)
-                  : colorScheme.surface.withValues(alpha: 0.08),
+                  ? Colors.black.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.05),
             ),
           ),
         ),
@@ -142,48 +152,29 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
             title: _isEditing 
                 ? TextField(
                     controller: _nameController,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
-                    decoration: InputDecoration(
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    decoration: const InputDecoration(
                       border: InputBorder.none,
                       hintText: 'Habit Name',
-                      hintStyle: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.5)),
                     ),
                   )
-                : Text(
-                    habit.name,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
+                : Text(habit.name),
             backgroundColor: Colors.transparent,
             elevation: 0,
             toolbarHeight: 80,
             titleSpacing: 16,
             automaticallyImplyLeading: false,
             leading: IconButton(
-              icon: Icon(
-                Icons.arrow_back,
-                color: colorScheme.onSurface,
-              ),
+              icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.of(context).pop(),
             ),
             actions: [
               IconButton(
-                icon: Icon(
-                  _isEditing ? Icons.save : Icons.edit,
-                  color: colorScheme.onSurface,
-                ),
+                icon: Icon(_isEditing ? Icons.save : Icons.edit),
                 onPressed: _isEditing ? _saveChanges : () => setState(() => _isEditing = true),
               ),
               IconButton(
-                icon: Icon(
-                  Icons.delete,
-                  color: colorScheme.error,
-                ),
+                icon: const Icon(Icons.delete),
                 onPressed: _deleteHabit,
               ),
             ],
@@ -194,23 +185,23 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Completion Card
-                _buildCompletionCard(habit, isDark, colorScheme),
+                _buildCompletionCard(habit),
                 const SizedBox(height: 16),
                 
                 // Statistics Cards
-                _buildStatisticsCards(habit, isDark, colorScheme),
+                _buildStatisticsCards(habit),
                 const SizedBox(height: 16),
                 
                 // Progress Chart
-                _buildProgressChart(habit, isDark, colorScheme),
+                _buildProgressChart(habit),
                 const SizedBox(height: 16),
                 
                 // Habit Details
-                _buildHabitDetails(habit, isDark, colorScheme),
+                _buildHabitDetails(habit),
                 const SizedBox(height: 16),
                 
                 // History
-                _buildHistorySection(habit, isDark, colorScheme),
+                _buildHistorySection(habit),
               ],
             ),
           ),
@@ -219,14 +210,14 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
     );
   }
 
-  Widget _buildCompletionCard(Habit habit, bool isDark, ColorScheme colorScheme) {
+  Widget _buildCompletionCard(Habit habit) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: colorScheme.surface.withValues(alpha: 0.15),
+        color: Colors.white.withOpacity(0.15),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.1),
+            color: Colors.blueAccent.withOpacity(0.1),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -244,14 +235,15 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
                   children: [
                     Text(
                       'Today\'s Progress',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      style: TextStyle(
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: colorScheme.onSurface,
+                        color: Colors.white.withOpacity(0.9),
                       ),
                     ),
                     Text(
                       habit.isCompletedToday ? 'Completed! 🎉' : 'Not completed yet',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      style: TextStyle(
                         color: habit.isCompletedToday ? Colors.green : Colors.orange,
                         fontWeight: FontWeight.w500,
                       ),
@@ -268,17 +260,18 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
             const SizedBox(height: 16),
             LinearProgressIndicator(
               value: habit.completionRate,
-              backgroundColor: colorScheme.onSurface.withValues(alpha: 0.3),
+              backgroundColor: Colors.grey.withOpacity(0.3),
               valueColor: AlwaysStoppedAnimation<Color>(
-                habit.isCompletedToday ? Colors.green : colorScheme.primary,
+                habit.isCompletedToday ? Colors.green : Colors.blueAccent,
               ),
               minHeight: 8,
             ),
             const SizedBox(height: 8),
             Text(
-              '${(habit.completionRate * 100).toInt()}% Complete',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.7),
+              '${habit.history.length}/${habit.targetDays} days completed',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 12,
               ),
             ),
           ],
@@ -287,74 +280,48 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
     );
   }
 
-  Widget _buildStatisticsCards(Habit habit, bool isDark, ColorScheme colorScheme) {
+  Widget _buildStatisticsCards(Habit habit) {
     return Row(
       children: [
         Expanded(
-          child: _buildStatCard(
-            'Current Streak',
-            '${habit.currentStreak}',
-            Icons.local_fire_department,
-            Colors.orange,
-            isDark,
-            colorScheme,
-          ),
+          child: _buildStatCard('Current Streak', '${habit.currentStreak}', Icons.local_fire_department),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildStatCard(
-            'Longest Streak',
-            '${habit.longestStreak}',
-            Icons.emoji_events,
-            Colors.amber,
-            isDark,
-            colorScheme,
-          ),
+          child: _buildStatCard('Longest Streak', '${habit.longestStreak}', Icons.emoji_events),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildStatCard(
-            'Total Days',
-            '${habit.history.length}',
-            Icons.calendar_today,
-            colorScheme.primary,
-            isDark,
-            colorScheme,
-          ),
+          child: _buildStatCard('This Week', '${habit.getWeeklyCompletionCount()}', Icons.calendar_today),
         ),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color, bool isDark, ColorScheme colorScheme) {
+  Widget _buildStatCard(String title, String value, IconData icon) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: colorScheme.surface.withValues(alpha: 0.15),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.1),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 24),
+          Icon(icon, color: Colors.blueAccent, size: 24),
           const SizedBox(height: 8),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: const TextStyle(
+              fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+              color: Colors.white,
             ),
           ),
           Text(
             title,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.7),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withOpacity(0.7),
             ),
             textAlign: TextAlign.center,
           ),
@@ -363,101 +330,115 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
     );
   }
 
-  Widget _buildProgressChart(Habit habit, bool isDark, ColorScheme colorScheme) {
+  Widget _buildProgressChart(Habit habit) {
+    // Create weekly data for the last 4 weeks
+    final weeks = List.generate(4, (index) {
+      final weekStart = DateTime.now().subtract(Duration(days: (3 - index) * 7));
+      return habit.history.where((date) {
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        return date.isAfter(weekStart.subtract(const Duration(days: 1))) &&
+               date.isBefore(weekEnd.add(const Duration(days: 1)));
+      }).length;
+    });
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: colorScheme.surface.withValues(alpha: 0.15),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.15),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Progress Chart',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            'Weekly Progress',
+            style: TextStyle(
+              fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+              color: Colors.white.withOpacity(0.9),
             ),
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 100,
-            child: _buildWeeklyChart(habit, isDark, colorScheme),
+            height: 200,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: 7,
+                barTouchData: BarTouchData(enabled: false),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        const weeks = ['4w ago', '3w ago', '2w ago', 'This week'];
+                        return Text(
+                          weeks[value.toInt()],
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 10,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          value.toInt().toString(),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 10,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: List.generate(4, (index) {
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: weeks[index].toDouble(),
+                        color: Colors.blueAccent,
+                        width: 20,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ],
+                  );
+                }),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 1,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: Colors.white.withOpacity(0.1),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWeeklyChart(Habit habit, bool isDark, ColorScheme colorScheme) {
-    final now = DateTime.now();
-    final weekData = List.generate(7, (index) {
-      final date = now.subtract(Duration(days: 6 - index));
-      return habit.history.any((h) =>
-          h.year == date.year &&
-          h.month == date.month &&
-          h.day == date.day);
-    });
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: weekData.asMap().entries.map((entry) {
-        final index = entry.key;
-        final completed = entry.value;
-        final dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-        return Column(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: completed ? colorScheme.primary : colorScheme.onSurface.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: Text(
-                  dayNames[index],
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: completed ? colorScheme.onPrimary : colorScheme.onSurface.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${now.subtract(Duration(days: 6 - index)).day}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildHabitDetails(Habit habit, bool isDark, ColorScheme colorScheme) {
+  Widget _buildHabitDetails(Habit habit) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: colorScheme.surface.withValues(alpha: 0.15),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.15),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -465,46 +446,59 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
         children: [
           Text(
             'Habit Details',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: TextStyle(
+              fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+              color: Colors.white.withOpacity(0.9),
             ),
           ),
           const SizedBox(height: 16),
-          _buildDetailRow('Type', habit.type, Icons.category, isDark, colorScheme),
-          _buildDetailRow('Frequency', habit.frequency, Icons.repeat, isDark, colorScheme),
-          _buildDetailRow('Target Days', '${habit.targetDays} days', Icons.track_changes, isDark, colorScheme),
-          if (habit.description != null)
-            _buildDetailRow('Description', habit.description!, Icons.description, isDark, colorScheme),
-          _buildDetailRow('Created', _formatDate(habit.createdAt), Icons.calendar_today, isDark, colorScheme),
+          _buildDetailRow('Type', habit.type),
+          _buildDetailRow('Frequency', habit.frequency),
+          _buildDetailRow('Status', habit.isActive ? 'Active' : 'Paused'),
+          if (habit.description?.isNotEmpty == true)
+            _buildDetailRow('Description', habit.description!),
+          if (habit.isReminderOn && habit.reminderTime != null)
+            _buildDetailRow('Reminder', habit.reminderTime!),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _toggleActive,
+                  icon: Icon(habit.isActive ? Icons.pause : Icons.play_arrow),
+                  label: Text(habit.isActive ? 'Pause' : 'Activate'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: habit.isActive ? Colors.orange : Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value, IconData icon, bool isDark, ColorScheme colorScheme) {
+  Widget _buildDetailRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(
-            icon,
-            color: colorScheme.primary,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 14,
             ),
           ),
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurface,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -513,72 +507,64 @@ class _HabitDetailsScreenState extends ConsumerState<HabitDetailsScreen> {
     );
   }
 
-  Widget _buildHistorySection(Habit habit, bool isDark, ColorScheme colorScheme) {
-    final recentHistory = habit.history.take(10).toList().reversed.toList();
-
+  Widget _buildHistorySection(Habit habit) {
+    final sortedHistory = habit.history.toList()..sort((a, b) => b.compareTo(a));
+    
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: colorScheme.surface.withValues(alpha: 0.15),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.15),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Recent Activity',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            'Recent Completions',
+            style: TextStyle(
+              fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+              color: Colors.white.withOpacity(0.9),
             ),
           ),
           const SizedBox(height: 16),
-          if (recentHistory.isEmpty)
+          if (sortedHistory.isEmpty)
             Center(
               child: Text(
-                'No activity yet',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.5),
+                'No completions yet',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 16,
                 ),
               ),
             )
           else
-            Column(
-              children: recentHistory.map((date) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        _formatDate(date),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+            ...sortedHistory.take(10).map((date) => _buildHistoryItem(date)),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+  Widget _buildHistoryItem(DateTime date) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle,
+            color: Colors.green,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '${date.day}/${date.month}/${date.year}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 } 

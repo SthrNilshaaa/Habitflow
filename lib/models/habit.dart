@@ -148,4 +148,30 @@ class Habit extends HiveObject {
              date.isBefore(monthEnd.add(const Duration(days: 1)));
     }).length;
   }
+
+  // Update streaks and related calculations
+  void updateStreaks() {
+    // This method ensures streak calculations are up to date
+    // The getter methods will recalculate when called
+    // This is mainly for triggering UI updates when data changes
+  }
+
+  // Get completion percentage for target
+  double get completionPercentage {
+    if (targetDays == 0) return 0.0;
+    return ((history.length / targetDays) * 100).clamp(0.0, 100.0);
+  }
+
+  // Get days remaining to target
+  int get daysRemaining {
+    return (targetDays - history.length).clamp(0, targetDays);
+  }
+
+  // Check if habit is on track to meet target
+  bool get isOnTrack {
+    if (targetDays == 0) return true;
+    final daysSinceCreation = DateTime.now().difference(createdAt).inDays;
+    final expectedCompletions = (daysSinceCreation * (targetDays / 30)).round();
+    return history.length >= expectedCompletions;
+  }
 } 

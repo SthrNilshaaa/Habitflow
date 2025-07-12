@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'app.dart';
 import 'models/habit.dart';
+import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   
   // Initialize timezone data for notifications
   tz.initializeTimeZones();
-  
-  await Hive.initFlutter();
   
   // Register Hive adapters
   Hive.registerAdapter(HabitAdapter());
@@ -24,12 +25,14 @@ void main() async {
     try {
       await Hive.deleteBoxFromDisk('habits');
     } catch (deleteError) {
-      // Ignore delete errors
+      // Silently handle delete error
     }
     
     // Create a new box
     await Hive.openBox('habits');
+    await FlutterDisplayMode.setHighRefreshRate();
   }
+
   
   runApp(const ProviderScope(child: App()));
 }

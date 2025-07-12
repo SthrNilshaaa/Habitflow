@@ -12,7 +12,7 @@ class NotificationService {
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
-    
+
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
@@ -43,9 +43,12 @@ class NotificationService {
     if (isPM && hour != 12) hour += 12;
     if (!isPM && hour == 12) hour = 0;
 
-    // Schedule main reminder at the specified time
+    // Cancel existing notifications for this habit
+    await cancelHabitReminder(habit.id);
+
+    // Schedule main reminder notification
     await _notifications.zonedSchedule(
-      habit.id.hashCode, // Use hash code as notification ID
+      habit.id.hashCode, // Main reminder ID
       'Habit Reminder',
       'Time to complete: ${habit.name}',
       _nextInstanceOfTime(hour, minute),
@@ -57,7 +60,7 @@ class NotificationService {
           importance: Importance.high,
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
-        ),
+      ),
         iOS: const DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -68,7 +71,7 @@ class NotificationService {
     final threeMinBefore = _nextInstanceOfTime(hour, minute).subtract(const Duration(minutes: 3));
     if (threeMinBefore.isAfter(tz.TZDateTime.now(tz.local))) {
       await _notifications.zonedSchedule(
-        habit.id.hashCode + 100, // Different ID for 3-min before reminder
+        habit.id.hashCode + 100, // 3-min before ID
         'Habit Reminder (3 min)',
         '${habit.name} in 3 minutes!',
         threeMinBefore,
@@ -87,12 +90,35 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     }
+
+    // Schedule 2-minute after missed notification
+    final twoMinAfter = _nextInstanceOfTime(hour, minute).add(const Duration(minutes: 2));
+    await _notifications.zonedSchedule(
+      habit.id.hashCode + 200, // 2-min after ID
+      'Habit Missed',
+      'You missed: ${habit.name}. Don\'t give up!',
+      twoMinAfter,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'habit_missed',
+          'Missed Habits',
+          channelDescription: 'Notifications for missed habits',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
   }
 
   static Future<void> cancelHabitReminder(String habitId) async {
-    await _notifications.cancel(habitId.hashCode);
-    await _notifications.cancel(habitId.hashCode + 100); // Cancel 3-min before reminder
-    await _notifications.cancel(habitId.hashCode + 200); // Cancel missed notification
+    // Cancel all notifications for this habit
+    await _notifications.cancel(habitId.hashCode); // Main reminder
+    await _notifications.cancel(habitId.hashCode + 100); // 3-min before
+    await _notifications.cancel(habitId.hashCode + 200); // 2-min after
   }
 
   static tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
@@ -148,14 +174,21 @@ class NotificationService {
     );
   }
 
-  // Check for missed habits and schedule missed notifications
-  static Future<void> checkForMissedHabits(List<Habit> habits) async {
-    final now = tz.TZDateTime.now(tz.local);
+  // Method to check if a habit was missed and show notification
+  static Future<void> checkAndNotifyMissedHabit(Habit habit) async {
+    if (!habit.isReminderOn || habit.reminderTime == null) return;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     
-    for (final habit in habits) {
-      if (!habit.isReminderOn || habit.reminderTime == null) continue;
-      
-      // Parse reminder time
+    // Check if habit was completed today
+    final completedToday = habit.history.any((date) =>
+        date.year == today.year &&
+        date.month == today.month &&
+        date.day == today.day);
+
+    if (!completedToday) {
+      // Parse reminder time to get the target time today
       final timeParts = habit.reminderTime!.split(' ');
       final time = timeParts[0].split(':');
       final isPM = timeParts[1].toUpperCase() == 'PM';
@@ -166,62 +199,12 @@ class NotificationService {
       if (isPM && hour != 12) hour += 12;
       if (!isPM && hour == 12) hour = 0;
 
-      // Calculate today's reminder time
-      final todayReminderTime = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+      final targetTime = DateTime(today.year, today.month, today.day, hour, minute);
       
-      // Check if habit was missed (2 minutes after reminder time and not completed today)
-      final twoMinutesAfter = todayReminderTime.add(const Duration(minutes: 2));
-      
-      if (now.isAfter(twoMinutesAfter) && 
-          now.isBefore(twoMinutesAfter.add(const Duration(minutes: 1))) && // Only trigger once
-          !habit.isCompletedToday) {
-        
-        // Schedule missed notification
-        await _notifications.zonedSchedule(
-          habit.id.hashCode + 200, // Different ID for missed notification
-          'Habit Missed 😔',
-          'You missed: ${habit.name}. Don\'t give up!',
-          now.add(const Duration(seconds: 30)), // Show after 30 seconds
-          NotificationDetails(
-            android: AndroidNotificationDetails(
-              'habit_missed',
-              'Missed Habits',
-              channelDescription: 'Notifications for missed habits',
-              importance: Importance.defaultImportance,
-              priority: Priority.defaultPriority,
-              icon: '@mipmap/ic_launcher',
-            ),
-            iOS: const DarwinNotificationDetails(),
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        );
+      // If it's past the target time and not completed, show missed notification
+      if (now.isAfter(targetTime.add(const Duration(minutes: 2)))) {
+        await showMissedHabitNotification(habit);
       }
     }
-  }
-
-  // Initialize periodic checking for missed habits
-  static Future<void> initializeMissedHabitChecking() async {
-    await initialize();
-    
-    // Schedule periodic checking every minute
-    await _notifications.zonedSchedule(
-      999999, // Unique ID for periodic checking
-      'Periodic Check',
-      'Checking for missed habits',
-      tz.TZDateTime.now(tz.local).add(const Duration(minutes: 1)),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          'periodic_check',
-          'Periodic Checks',
-          channelDescription: 'Periodic habit checking',
-          importance: Importance.min,
-          priority: Priority.min,
-          icon: '@mipmap/ic_launcher',
-        ),
-        iOS: const DarwinNotificationDetails(),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
   }
 }

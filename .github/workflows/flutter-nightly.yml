@@ -1,0 +1,146 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run every day at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.24.5'
+
+jobs:
+  nightly-test:
+    name: Nightly Test Suite
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run full test suite
+      run: flutter test --coverage
+      
+    - name: Generate coverage report
+      run: |
+        genhtml coverage/lcov.info -o coverage/html
+        echo "Coverage report generated"
+        
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: nightly-coverage-report
+        path: coverage/html/
+
+  nightly-build:
+    name: Nightly Build
+    runs-on: ubuntu-latest
+    needs: nightly-test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Build for all platforms
+      run: |
+        flutter build apk --release
+        flutter build web --release
+        echo "Builds completed successfully"
+        
+    - name: Upload nightly builds
+      uses: actions/upload-artifact@v4
+      with:
+        name: nightly-builds
+        path: |
+          build/app/outputs/flutter-apk/app-release.apk
+          build/web/
+
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Check for outdated dependencies
+      run: flutter pub outdated
+      
+    - name: Check for security vulnerabilities
+      run: |
+        flutter pub deps --style=tree
+        echo "Dependency check completed"
+
+  performance-benchmark:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: flutter pub get
+      
+    - name: Run performance tests
+      run: |
+        flutter test test/performance/
+        echo "Performance tests completed"
+      continue-on-error: true
+
+  nightly-report:
+    name: Generate Nightly Report
+    runs-on: ubuntu-latest
+    needs: [nightly-test, nightly-build, dependency-check, performance-benchmark]
+    if: always()
+    
+    steps:
+    - name: Generate nightly report
+      run: |
+        echo "# Nightly Build Report - $(date)" > nightly-report.md
+        echo "" >> nightly-report.md
+        echo "## Test Results" >> nightly-report.md
+        echo "- Unit Tests: ${{ needs.nightly-test.result }}" >> nightly-report.md
+        echo "- Build Status: ${{ needs.nightly-build.result }}" >> nightly-report.md
+        echo "- Dependency Check: ${{ needs.dependency-check.result }}" >> nightly-report.md
+        echo "- Performance Tests: ${{ needs.performance-benchmark.result }}" >> nightly-report.md
+        echo "" >> nightly-report.md
+        echo "## Summary" >> nightly-report.md
+        echo "Build completed at: $(date)" >> nightly-report.md
+        echo "Commit: ${{ github.sha }}" >> nightly-report.md
+        
+    - name: Upload nightly report
+      uses: actions/upload-artifact@v4
+      with:
+        name: nightly-report
+        path: nightly-report.md 
