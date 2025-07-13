@@ -5,7 +5,10 @@ on:
   push:
     branches:
       - main  # or your main development branch
-
+      
+permissions:
+  contents: write
+  
 jobs:
   build:
     runs-on: ubuntu-latest
