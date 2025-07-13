@@ -23,7 +23,7 @@ jobs:
         run: flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --split-per-abi
+        run: flutter build apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -35,7 +35,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build/app/outputs/flutter-apk/app-release.apk
-          tags_name: 1.0.0
+          tag_name: 1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
