@@ -80,7 +80,7 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav> with Ticker
       blur: 20,
       glassColor: isDark
           ? Colors.white.withValues(alpha: 0.10)
-          : Colors.white.withValues(alpha: 0.20),
+          : Colors.black.withValues(alpha: 0.10),
       refractiveIndex: 1.3,
     );
     return FadeTransition(

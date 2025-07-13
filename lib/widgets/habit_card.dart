@@ -41,21 +41,21 @@ class HabitCard extends StatelessWidget {
                   children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Colors.blue[(habit.colorIndex + 1) * 100],
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.blue[(habit.colorIndex + 1) * 100],
                           child: Icon(
                             _getHabitIcon(habit.type),
                             size: 32, 
                             color: Colors.white
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                               Row(
                                 children: [
                                   Expanded(
@@ -84,7 +84,7 @@ class HabitCard extends StatelessWidget {
                                   color: isDark ? Colors.white.withValues(alpha: 0.7) : Colors.grey,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                          const SizedBox(height: 8),
                               Row(
                                 children: [
                                   Icon(
@@ -122,10 +122,10 @@ class HabitCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    LinearProgressIndicator(
+                          LinearProgressIndicator(
                       value: habit.completionRate,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(8),
+                            minHeight: 6,
+                            borderRadius: BorderRadius.circular(8),
                       backgroundColor: isDark 
                           ? Colors.grey.withValues(alpha: 0.3)
                           : Colors.grey[200],

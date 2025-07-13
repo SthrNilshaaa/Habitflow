@@ -194,7 +194,7 @@ class _MainContentState extends ConsumerState<MainContent> {
     }
   }
 
-   void _onItemTapped(int index) {
+  void _onItemTapped(int index) {
     if (_selectedIndex != index) {
     setState(() {
       _selectedIndex = index;
@@ -232,7 +232,7 @@ class _MainContentState extends ConsumerState<MainContent> {
                   Color(0x66FBC2EB),
                   Color(0x66FDC2FB),
                 ],
-        ),
+      ),
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
