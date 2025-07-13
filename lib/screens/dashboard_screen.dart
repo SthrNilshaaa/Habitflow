@@ -51,9 +51,9 @@ class DashboardScreen extends ConsumerWidget {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16.0, 45.0, 16.0, 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
@@ -95,7 +95,7 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+          const SizedBox(height: 16),
               
               // Statistics Overview
               if (habits.isNotEmpty) ...[
@@ -103,14 +103,14 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 20),
               ],
               
-              habits.isEmpty
-                  ? Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
+          habits.isEmpty
+              ? Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                             Icon(Icons.hourglass_empty, size: 80, color: Colors.blueAccent.withValues(alpha: 0.3)),
-                            const SizedBox(height: 16),
+                        const SizedBox(height: 16),
                             Text(
                               'No habits yet!',
                               style: TextStyle(
@@ -118,24 +118,24 @@ class DashboardScreen extends ConsumerWidget {
                                 fontSize: 18,
                               ),
                             ),
-                            const SizedBox(height: 16),
+                        const SizedBox(height: 16),
                             RiveAnimatedButton(label: 'Add Habit', onTap: () {
                               Navigator.pushNamed(context, '/add-habit');
                             }),
-                            ],
-                        ),
-                      ),
-                    )
-                  : Expanded(
+                      ],
+                    ),
+                  ),
+                )
+              : Expanded(
                       
                       child: ListView.builder(
                         
                         padding: const EdgeInsets.symmetric(vertical: 0),
                         
-                        itemCount: habits.length,
+                    itemCount: habits.length,
                        // separatorBuilder: (_, __) => const SizedBox(height: 16),
-                        itemBuilder: (context, i) => HabitCard(
-                          habit: habits[i],
+                    itemBuilder: (context, i) => HabitCard(
+                      habit: habits[i],
                           onTap: () => Navigator.pushNamed(
                             context, 
                             '/habit-details',
@@ -193,8 +193,8 @@ class DashboardScreen extends ConsumerWidget {
               Icons.local_fire_department,
               Colors.orange,
               isDark,
-            ),
-          ),
+                  ),
+                ),
         ],
       ),
     );

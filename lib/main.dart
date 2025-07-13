@@ -29,7 +29,7 @@ void main() async {
     }
     
     // Create a new box
-    await Hive.openBox('habits');
+  await Hive.openBox('habits');
     await FlutterDisplayMode.setHighRefreshRate();
   }
 
