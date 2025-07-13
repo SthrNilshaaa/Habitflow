@@ -224,6 +224,6 @@ If you have any questions or need help:
 ---
 
 <div align="center">
-  <p>Made with ❤️ by the HabitFlow Team</p>
+  <p>Made with ❤️ by the Nilesh Suthar </p>
   <p>If you find this project helpful, please give it a ⭐️!</p>
 </div>
