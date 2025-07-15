@@ -196,68 +196,13 @@ class _MainContentState extends ConsumerState<MainContent> {
 
   void _onItemTapped(int index) {
     if (_selectedIndex != index) {
-      final int currentIndex = _selectedIndex;
-      setState(() {
-        _selectedIndex = index;
-      });
-      HapticFeedback.lightImpact();
-      
-      // Calculate the direction and number of steps
-      final int steps = (index - currentIndex).abs();
-      final int direction = index > currentIndex ? 1 : -1;
-      
-      if (steps > 1) {
-        // For jumps of more than 1 page, animate through intermediate pages
-        _animateThroughPages(currentIndex, index, direction, steps);
-      } else {
-        // For adjacent pages, use normal animation
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
-    }
-  }
-
-  void _animateThroughPages(int startIndex, int endIndex, int direction, int steps) {
-    int currentStep = 0;
-    final int targetIndex = endIndex;
     
-    void animateNext() {
-      if (currentStep < steps) {
-        final int nextIndex = startIndex + (direction * (currentStep + 1));
-        
-        // Animate to the next intermediate page with shorter duration for smoother feel
-        _pageController.animateToPage(
-          nextIndex,
-          duration: Duration(milliseconds: 150 ~/ steps), // Even faster for intermediate steps
-          curve: Curves.easeInOut,
-        ).then((_) {
-          currentStep++;
-          
-          // Provide subtle haptic feedback for intermediate steps
-          if (currentStep < steps) {
-            HapticFeedback.selectionClick();
-          }
-          
-          // If this is the final step, ensure we're at the target
-          if (currentStep >= steps) {
-            _pageController.animateToPage(
-              targetIndex,
-              duration: const Duration(milliseconds: 100),
-              curve: Curves.easeInOut,
-            );
-          } else {
-            // Continue to next intermediate page
-            animateNext();
-          }
-        });
-      }
+    setState(() {
+      _selectedIndex = index;
+    });
+    HapticFeedback.lightImpact();
+    _pageController.jumpToPage(index);
     }
-    
-    // Start the sequential animation
-    animateNext();
   }
 
   @override

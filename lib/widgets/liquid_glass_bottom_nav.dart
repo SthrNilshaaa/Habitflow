@@ -21,8 +21,6 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
-  late AnimationController _progressController;
-  late Animation<double> _progressAnimation;
   
   bool get isDark => Theme.of(context).brightness == Brightness.dark;
 
@@ -36,40 +34,19 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav>
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    
-    _progressController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
-    );
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _progressController.dispose();
     super.dispose();
   }
 
   void _onItemTap(int index) {
-    final int currentIndex = widget.currentIndex;
-    final int steps = (index - currentIndex).abs();
-    
-    if (steps > 1) {
-      // Show progress animation for multi-step navigation
-      _progressController.forward().then((_) {
-        _progressController.reset();
-        widget.onTap(index);
-      });
-    } else {
-      // Normal single-step navigation
-      _animationController.forward().then((_) {
-        _animationController.reverse();
-        widget.onTap(index);
-      });
-    }
+    _animationController.forward().then((_) {
+      _animationController.reverse();
+      widget.onTap(index);
+    });
   }
 
   @override
@@ -104,126 +81,85 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav>
                  ),
                ],
             ),
-            child: Stack(
-              children: [
-                // Progress indicator for multi-step navigation
-                AnimatedBuilder(
-                  animation: _progressAnimation,
-                  builder: (context, child) {
-                    return Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        height: 3,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.blueAccent.withValues(alpha: 0.8),
-                              Colors.purpleAccent.withValues(alpha: 0.6),
-                            ],
-                          ),
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: _progressAnimation.value,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(widget.items.length, (index) {
+                final isSelected = widget.currentIndex == index;
+                return Expanded(
+                  child: AnimatedBuilder(
+                    animation: _animationController,
+                    builder: (context, child) {
+                      return Transform.scale(
+                        scale: isSelected ? _scaleAnimation.value : 1.0,
+                        child: GestureDetector(
+                          onTap: () => _onItemTap(index),
                           child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.blueAccent.withValues(alpha: 0.9),
-                                  Colors.purpleAccent.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(25),
+                              gradient: isSelected
+                                  ? LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Colors.blueAccent.withValues(alpha: 0.8),
+                                        Colors.purpleAccent.withValues(alpha: 0.6),
+                                      ],
+                                    )
+                                  : null,
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.blueAccent.withValues(alpha: 0.3),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    curve: Curves.easeInOut,
+                                    child: Icon(
+                                      widget.items[index].icon,
+                                      color: isSelected
+                                          ?Colors.white.withValues(alpha: 0.9)
+                                          : isDark?Colors.white.withValues(alpha: 0.7):Colors.black.withValues(alpha: 0.7),
+                                      size: isSelected ? 28 : 24,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 200),
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white.withValues(alpha: 0.9)
+                                          : isDark?Colors.white.withValues(alpha: 0.7):Colors.black.withValues(alpha: 0.7),
+                                      fontSize: isSelected ? 12 : 10,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    child: Text(
+                                      widget.items[index].title,
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-                // Navigation items
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: List.generate(widget.items.length, (index) {
-                    final isSelected = widget.currentIndex == index;
-                    return Expanded(
-                      child: AnimatedBuilder(
-                        animation: _animationController,
-                        builder: (context, child) {
-                          return Transform.scale(
-                            scale: isSelected ? _scaleAnimation.value : 1.0,
-                            child: GestureDetector(
-                              onTap: () => _onItemTap(index),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(25),
-                                  gradient: isSelected
-                                      ? LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            Colors.blueAccent.withValues(alpha: 0.8),
-                                            Colors.purpleAccent.withValues(alpha: 0.6),
-                                          ],
-                                        )
-                                      : null,
-                                  boxShadow: isSelected
-                                      ? [
-                                          BoxShadow(
-                                            color: Colors.blueAccent.withValues(alpha: 0.3),
-                                            blurRadius: 12,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves.easeInOut,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      AnimatedContainer(
-                                        duration: const Duration(milliseconds: 200),
-                                        curve: Curves.easeInOut,
-                                        child: Icon(
-                                          widget.items[index].icon,
-                                          color: isSelected
-                                              ?Colors.white.withValues(alpha: 0.9)
-                                              : isDark?Colors.white.withValues(alpha: 0.7):Colors.black.withValues(alpha: 0.7),
-                                          size: isSelected ? 28 : 24,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      AnimatedDefaultTextStyle(
-                                        duration: const Duration(milliseconds: 200),
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? Colors.white.withValues(alpha: 0.9)
-                                              : isDark?Colors.white.withValues(alpha: 0.7):Colors.black.withValues(alpha: 0.7),
-                                          fontSize: isSelected ? 12 : 10,
-                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                        ),
-                                        child: Text(
-                                          widget.items[index].title,
-                                          textAlign: TextAlign.center,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  }),
-                ),
-              ],
+                      );
+                    },
+                  ),
+                );
+              }),
             ),
           ),
         ),

@@ -243,7 +243,7 @@ class DashboardScreen extends ConsumerWidget {
             },
             child: const Text('Delete'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-          ),
+                ),
         ],
       ),
     );
