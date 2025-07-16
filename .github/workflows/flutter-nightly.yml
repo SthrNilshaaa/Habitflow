@@ -10,7 +10,7 @@ permissions:
   contents: write  # Required to create GitHub Release and upload assets
 
 env:
-  FLUTTER_VERSION: '3.24.5'
+  FLUTTER_VERSION: '3.32.6'
 
 jobs:
   nightly-test:
