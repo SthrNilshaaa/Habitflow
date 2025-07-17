@@ -31,8 +31,8 @@ jobs:
       run: flutter pub get
       
     - name: Run full test suite
-      run: flutter test --coverage
-      
+      run: flutter test --coverage --reporter expanded
+          
     - name: Generate coverage report
       run: |
         genhtml coverage/lcov.info -o coverage/html
